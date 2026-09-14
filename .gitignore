@@ -1,0 +1,12 @@
+# Diretórios de compilação do CMake
+build/
+out/
+
+# Configs do VS Code
+.vscode/
+
+# Binários e bibliotecas dinâmicas do windows
+*.dll
+*.exe
+*.lib
+*.pdb
