@@ -1,10 +1,12 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+#include <GLFW/glfw3.h>
 
 using namespace std;
 using namespace cv;
-
-// teste att github
 
 int main() {
     // Teste inicial de contorno
