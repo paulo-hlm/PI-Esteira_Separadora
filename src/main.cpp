@@ -22,6 +22,9 @@ GLFWwindow* StartWindow(int width, int height, const char* Esteira) {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+    // Abre a interface em tela cheia
+    glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+
     GLFWwindow* window = glfwCreateWindow(width, height, Esteira, nullptr, nullptr);
     if (!window) {
         cerr << "Falha ao criar a janela GLFW" << endl;
@@ -50,26 +53,30 @@ void startImGui(GLFWwindow* window) {
 // Renderização da interface do ImGui:
 void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos) {
 
-    // Bloco de texto
-    Begin("Interface de Controle da Esteira");
-    Text("Bem-vindo ao sistema de controle da esteira!");
-    Text("Aqui você pode monitorar e controlar a esteira.");
-    Separator();
-    End();
-
-    Begin("Contagem de objetos");
-    Text("Número de objetos detectados: %d", numContornos);
-    Separator();
-    End();
-
-    Begin("Visualização das imagens");
+    // Imagens
+    SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(750, 470), ImGuiCond_Once);
+    Begin("Visualização das imagens", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
     Text("          Referência:                         Comparação:                           Resultado:");
     if (texBranco) Image((void*)(intptr_t)texBranco, ImVec2(236, 419));
     SameLine(); 
     if (texManchas) Image((void*)(intptr_t)texManchas, ImVec2(236, 419));
     SameLine(); 
     if (texResultado) Image((void*)(intptr_t)texResultado, ImVec2(236, 419));
+    End();
+   
+    // Bloco de texto
+    SetNextWindowPos(ImVec2(770, 10), ImGuiCond_Once);
+    Begin("Interface de Controle da Esteira");
+    Text("Bem-vindo ao sistema de controle da esteira!");
+    Text("Aqui você pode monitorar e controlar a esteira.");
+    Separator();
+    End();
 
+    SetNextWindowPos(ImVec2(770, 100), ImGuiCond_Once);
+    Begin("Contagem de objetos");
+    Text("Número de objetos detectados: %d", numContornos);
+    Separator();
     End();
 }
 
