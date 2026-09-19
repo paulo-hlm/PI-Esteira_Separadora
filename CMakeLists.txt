@@ -28,15 +28,23 @@ add_executable(SeparadorVidro src/main.cpp)
 # 6. Configuração do ImGui
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imgui)
 
-file(GLOB IMGUI_SOURCES
-    ${IMGUI_DIR}/*.cpp
+# Lista de forma explícita ao invés de usar file(GLOB)
+set(IMGUI_SOURCES
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
 # 7. Adiciona os arquivos do ImGui ao executável que já foi criado
 target_sources(SeparadorVidro PRIVATE ${IMGUI_SOURCES})
-target_include_directories(SeparadorVidro PRIVATE ${IMGUI_DIR} ${IMGUI_DIR}/backends)
+target_include_directories(SeparadorVidro PRIVATE 
+    ${IMGUI_DIR} 
+    ${IMGUI_DIR}/backends
+)
 
 # 8. Linka TUDO de uma vez só no final (OpenCV, GLFW e OpenGL)
 target_link_libraries(SeparadorVidro PRIVATE ${OpenCV_LIBS} glfw opengl32)
