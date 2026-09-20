@@ -46,12 +46,50 @@ void startImGui(GLFWwindow* window) {
 
     StyleColorsDark();
 
+    // Centraliza o título da janela
+    GetStyle().WindowTitleAlign = ImVec2(0.5f, 0.5f);
+
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
 }
 
+// Função para centralizar o texto
+void TextoCentralizado(const char* texto) {
+    // Calcula o tamanho da janela e o tamanho do texto
+    float larguraJanela = ImGui::GetWindowWidth();
+    float larguraTexto = ImGui::CalcTextSize(texto).x;
+
+    // Define a nova posição X do cursor
+    ImGui::SetCursorPosX((larguraJanela - larguraTexto) * 0.5f);
+    
+    // Desenha o texto
+    ImGui::Text("%s", texto);
+}
+
+// Função para centralizar o texto colorido
+void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
+    float larguraJanela = ImGui::GetWindowWidth();
+    float larguraTexto = ImGui::CalcTextSize(texto).x;
+
+    ImGui::SetCursorPosX((larguraJanela - larguraTexto) * 0.5f);
+    ImGui::TextColored(cor, "%s", texto);
+}
+
 // Renderização da interface do ImGui:
 void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos) {
+
+    // Tempo
+    double tempo = glfwGetTime();
+    int horas = (int)tempo / 3600;
+    int minutos = ((int)tempo % 3600) / 60;
+    int segundos = (int)tempo % 60;
+    SetNextWindowPos(ImVec2(1180, 10), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 50), ImGuiCond_Once);
+    Begin("Tempo de operação", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+    // Monta o texto do cronômetro antes de enviar para centralizar
+    char bufferCronometro[64];
+    snprintf(bufferCronometro, sizeof(bufferCronometro), "%02d:%02d:%02d", horas, minutos, segundos);
+    TextoColoridoCentralizado(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), bufferCronometro);End();
 
     // Imagens
     SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
@@ -67,14 +105,16 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
    
     // Bloco de texto
     SetNextWindowPos(ImVec2(770, 10), ImGuiCond_Once);
-    Begin("Interface de Controle da Esteira");
-    Text("Bem-vindo ao sistema de controle da esteira!");
+    SetNextWindowSize(ImVec2(400, 70), ImGuiCond_Once);
+    Begin("Interface de Controle da Esteira", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    TextoCentralizado("Bem-vindo ao sistema de controle da esteira!");
     Text("Aqui você pode monitorar e controlar a esteira.");
     Separator();
     End();
 
     SetNextWindowPos(ImVec2(770, 100), ImGuiCond_Once);
-    Begin("Contagem de objetos");
+    SetNextWindowSize(ImVec2(400, 60), ImGuiCond_Once);
+    Begin("Contagem de objetos:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
     Text("Número de objetos detectados: %d", numContornos);
     Separator();
     End();
@@ -145,7 +185,7 @@ int main() {
     drawContours(resultado, contornos, -1, Scalar(0, 0, 255), 2);
 
     // Inicializa a janela
-    GLFWwindow* window = StartWindow(800, 600, "Teste");
+    GLFWwindow* window = StartWindow(800, 600, "Sistema de filtragem de vidro para reciclagem");
     if (!window) return -1;
 
     startImGui(window);
