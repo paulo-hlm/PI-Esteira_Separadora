@@ -76,7 +76,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo, int& deteccao) {
+void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo, int& deteccao, int& total_V, int& total_O) {
 
     // Autores
     SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
@@ -156,10 +156,12 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.1f, 0.8f, 0.1f, 1.0f), "VIDRO");
+            total_V++;
         } else if (deteccao == 2){
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "Descarte");
+            total_O++;
         }
     }
     Separator();
@@ -239,6 +241,8 @@ int main() {
     double tempoOperacao = 0.0;
     double tempoJanela = glfwGetTime();
     int deteccao = 0;
+    int total_V = 0;
+    int total_O = 0;
     
     //Leitura as imagens
     Mat branco = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/branca.jpg", IMREAD_COLOR);
@@ -292,7 +296,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao, deteccao);
+        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao, deteccao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
