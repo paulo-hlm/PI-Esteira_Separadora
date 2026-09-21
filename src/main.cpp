@@ -156,12 +156,10 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.1f, 0.8f, 0.1f, 1.0f), "VIDRO");
-            total_V++;
         } else if (deteccao == 2){
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "Descarte");
-            total_O++;
         }
     }
     Separator();
@@ -169,8 +167,12 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
     PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
         if (Button("teste", ImVec2(130, 50))) {
-        if (deteccao != 2) {
+        if (deteccao == 0) {
             deteccao++;
+            total_V++;
+        } else if (deteccao == 1) {
+            deteccao = 2;
+            total_O++;
         } else {
             deteccao = 0;
         }
