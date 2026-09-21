@@ -80,8 +80,14 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
 
     // Autores
     SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(150, 200), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 120), ImGuiCond_Once);
     Begin("Autores:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    Separator();
+    Text("  João Victor");
+    Text("  Paulo Henrique");
+    Text("  Theo de Andrade");
+    Text("  Vitor Pazetto");
+    Separator();
     End();
     
 
@@ -173,7 +179,7 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     
     // Contagem de objetos
     SetNextWindowPos(ImVec2(770, 170), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(400, 50), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(400, 200), ImGuiCond_Once);
     Begin("Contagem de objetos:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
     Text("Número de objetos detectados totais: X");
     Text("Número de objetos detectados em frame: %d", numContornos);
