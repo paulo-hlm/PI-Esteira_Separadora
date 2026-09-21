@@ -76,7 +76,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, boo& esteira, double tempo) {
+void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo) {
 
     // Tempo
     double tempo = glfwGetTime();
@@ -165,7 +165,7 @@ GLuint CVtoGL(const Mat& mat) {
 int main() {
 
     // Variáveis
-    bool esteira = false;
+    bool estadoEsteira = false;
     double tempoOperacao = 0.0;
     double tempoJanela = glfwGetTime();
     
@@ -207,7 +207,7 @@ int main() {
 
         // Lógica botão
         double tempoAtual = glfwGetTime();
-        if (esteira = true){ 
+        if (estadoEsteira = true){ 
             tempoOperacao += (tempoAtual - tempoJanela);
         }
         tempoJanela = tempoAtual;
