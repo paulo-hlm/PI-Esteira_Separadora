@@ -76,7 +76,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos) {
+void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, boo& esteira, double tempo) {
 
     // Tempo
     double tempo = glfwGetTime();
@@ -164,6 +164,11 @@ GLuint CVtoGL(const Mat& mat) {
 
 int main() {
 
+    // Variáveis
+    bool esteira = false;
+    double tempoOperacao = 0.0;
+    double tempoJanela = glfwGetTime();
+    
     //Leitura as imagens
     Mat branco = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/branca.jpg", IMREAD_COLOR);
     Mat manchas = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/manchas.jpg", IMREAD_COLOR);
@@ -199,6 +204,14 @@ int main() {
 
     // Loop principal de exibição
     while (!glfwWindowShouldClose(window)) {
+
+        // Lógica botão
+        double tempoAtual = glfwGetTime();
+        if (esteira = true){ 
+            tempoOperacao += (tempoAtual - tempoJanela);
+        }
+        tempoJanela = tempoAtual;
+        
         // Processa eventos do GLFW
         glfwPollEvents();
 
@@ -208,7 +221,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size());
+        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), esteira, tempoOperacao);
 
         // Renderiza o ImGui
         Render();
