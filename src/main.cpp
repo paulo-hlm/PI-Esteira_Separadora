@@ -76,7 +76,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo) {
+void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo, int& deteccao) {
 
     // Tempo
     int horas = (int)tempo / 3600;
@@ -127,8 +127,46 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     PopStyleVar(1);
     End();
 
-    SetNextWindowPos(ImVec2(770, 100), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(400, 60), ImGuiCond_Once);
+    //Status da esteira
+    SetNextWindowPos(ImVec2(770, 10), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(400, 150), ImGuiCond_Once);
+    Begin("Status", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    Text("Estado da esteira: %s", estadoEsteira ? "Ligada" : "Desligada");
+    Separator();
+
+    if (estadoEsteira == false) {
+        Text("Inicie a esteira para iniciar a operação");
+    } else {
+        if (deteccao == 0) {
+        Text("Aguardando Imagem");
+        } else if (deteccao == 1) {
+            Text("Objeto detectado:");
+            SameLine();
+            TextColored(ImVec4(0.1f, 0.8f, 0.1f, 1.0f), "VIDRO");
+        } else if (deteccao == 2){
+            Text("Objeto detectado:");
+            SameLine();
+            TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "Descarte");
+        }
+    }
+    Separator();
+
+    PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+    PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+        if (Button("teste", ImVec2(130, 50))) {
+        if (deteccao != 2) {
+            deteccao++;
+        } else {
+            deteccao = 0;
+        }
+        }
+        PopStyleColor(2);
+
+    End();
+    
+    // Contagem de objetos
+    SetNextWindowPos(ImVec2(770, 170), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(400, 50), ImGuiCond_Once);
     Begin("Contagem de objetos:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
     Text("Número de objetos detectados: %d", numContornos);
     Separator();
@@ -183,6 +221,7 @@ int main() {
     bool estadoEsteira = false;
     double tempoOperacao = 0.0;
     double tempoJanela = glfwGetTime();
+    int deteccao = 0;
     
     //Leitura as imagens
     Mat branco = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/branca.jpg", IMREAD_COLOR);
@@ -236,7 +275,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao);
+        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao, deteccao);
 
         // Renderiza o ImGui
         Render();
