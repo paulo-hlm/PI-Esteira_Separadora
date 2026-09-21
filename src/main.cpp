@@ -175,7 +175,11 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     SetNextWindowPos(ImVec2(770, 170), ImGuiCond_Once);
     SetNextWindowSize(ImVec2(400, 50), ImGuiCond_Once);
     Begin("Contagem de objetos:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-    Text("Número de objetos detectados: %d", numContornos);
+    Text("Número de objetos detectados totais: X");
+    Text("Número de objetos detectados em frame: %d", numContornos);
+    Separator();
+    Text("Número de objetos transparentes detectados: X");
+    Text("Número de objetos opacos detectados: X");
     Separator();
     End();
 }
