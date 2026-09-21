@@ -79,7 +79,6 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo) {
 
     // Tempo
-    double tempo = glfwGetTime();
     int horas = (int)tempo / 3600;
     int minutos = ((int)tempo % 3600) / 60;
     int segundos = (int)tempo % 60;
@@ -89,7 +88,8 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     // Monta o texto do cronômetro antes de enviar para centralizar
     char bufferCronometro[64];
     snprintf(bufferCronometro, sizeof(bufferCronometro), "%02d:%02d:%02d", horas, minutos, segundos);
-    TextoColoridoCentralizado(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), bufferCronometro);End();
+    TextoColoridoCentralizado(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), bufferCronometro);
+    End();
 
     // Imagens
     SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
@@ -103,13 +103,28 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     if (texResultado) Image((void*)(intptr_t)texResultado, ImVec2(236, 419));
     End();
    
-    // Bloco de texto
-    SetNextWindowPos(ImVec2(770, 10), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(400, 70), ImGuiCond_Once);
-    Begin("Interface de Controle da Esteira", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
-    TextoCentralizado("Bem-vindo ao sistema de controle da esteira!");
-    Text("Aqui você pode monitorar e controlar a esteira.");
-    Separator();
+    // Botão de controle da esteira
+    ImGuiWindowFlags flagsBotao = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    SetNextWindowPos(ImVec2(1180, 60), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
+    Begin("Interface de Controle da Esteira", NULL, flagsBotao);
+    PushStyleVar(ImGuiStyleVar_FrameRounding, 25.0f); 
+    if (estadoEsteira == true){
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+        if (Button("STOP", ImVec2(130, 50))) {
+            estadoEsteira = false;
+        }
+        PopStyleColor(2);
+    } else {
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
+        if (Button("START", ImVec2(130, 50))) {
+            estadoEsteira = true;
+        }
+        PopStyleColor(2);
+    }
+    PopStyleVar(1);
     End();
 
     SetNextWindowPos(ImVec2(770, 100), ImGuiCond_Once);
@@ -207,7 +222,7 @@ int main() {
 
         // Lógica botão
         double tempoAtual = glfwGetTime();
-        if (estadoEsteira = true){ 
+        if (estadoEsteira == true){ 
             tempoOperacao += (tempoAtual - tempoJanela);
         }
         tempoJanela = tempoAtual;
@@ -221,7 +236,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), esteira, tempoOperacao);
+        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao);
 
         // Renderiza o ImGui
         Render();
