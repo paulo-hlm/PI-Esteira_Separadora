@@ -78,6 +78,13 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 // Renderização da interface do ImGui:
 void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo, int& deteccao) {
 
+    // Autores
+    SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 200), ImGuiCond_Once);
+    Begin("Autores:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    End();
+    
+
     // Tempo
     int horas = (int)tempo / 3600;
     int minutos = ((int)tempo % 3600) / 60;
