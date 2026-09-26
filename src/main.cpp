@@ -76,7 +76,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado, int numContornos, bool& estadoEsteira, double tempo, int& deteccao, int& total_V, int& total_O) {
+void desenharInterface(GLuint textCamera, int numContornos, bool& estadoEsteira, double tempo, int& deteccao, int& total_V, int& total_O) {
 
     // Autores
     SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
@@ -104,16 +104,24 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
     TextoColoridoCentralizado(ImVec4(0.0f, 1.0f, 0.0f, 1.0f), bufferCronometro);
     End();
 
-    // Imagens
+    // Câmera ao vivo
     SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(750, 470), ImGuiCond_Once);
-    Begin("Visualização das imagens", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-    Text("          Referência:                         Comparação:                           Resultado:");
-    if (texBranco) Image((void*)(intptr_t)texBranco, ImVec2(236, 419));
-    SameLine(); 
-    if (texManchas) Image((void*)(intptr_t)texManchas, ImVec2(236, 419));
-    SameLine(); 
-    if (texResultado) Image((void*)(intptr_t)texResultado, ImVec2(236, 419));
+    SetNextWindowSize(ImVec2(750, 550), ImGuiCond_Once);
+    Begin("Live camera", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+    
+    if (estadoEsteira){
+        if (textCamera){
+            SetCursorPosX((750 - 640) * 0.5f); // Centraliza a imagem da câmera
+            Image((void*)(intptr_t)textCamera, ImVec2(640, 480));
+        } else {
+            SetCursorPosY((550 - 20) * 0.5f); // Centraliza o texto
+            TextoCentralizado("Sem sinal de imagem.");
+        }
+    } else {
+        SetCursorPosY((550 - 20) * 0.5f); // Centraliza o texto
+        TextoCentralizado("Pressione START para iniciar o sistema.");
+    }
+
     End();
    
     // Botão de controle da esteira
@@ -159,14 +167,14 @@ void desenharInterface(GLuint texBranco, GLuint texManchas, GLuint texResultado,
         } else if (deteccao == 2){
             Text("Objeto detectado:");
             SameLine();
-            TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "Descarte");
+            TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "DESCARTE");
         }
     }
     Separator();
 
     PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
     PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
-        if (Button("teste", ImVec2(130, 50))) {
+        if (Button("teste", ImVec2(130, 50)) && estadoEsteira == true) {
         if (deteccao == 0) {
             deteccao++;
             total_V++;
@@ -205,7 +213,7 @@ void EndOperation(GLFWwindow* window) {
 }
 
 // Converte uma imagem de OpenCV (Mat) em uma textura OpenGL (GLuint)
-GLuint CVtoGL(const Mat& mat) {
+GLuint UpdateGLTexture(GLuint& textureID, const Mat& mat) {
     if (mat.empty()) return 0;
 
     Mat imagemConvertida;
@@ -219,18 +227,17 @@ GLuint CVtoGL(const Mat& mat) {
     }
 
     // Gera o ID da textura no OpenGL
-    GLuint textureID;
-    glGenTextures(1, &textureID);
-    glBindTexture(GL_TEXTURE_2D, textureID);
+    if (textureID == 0) {
+        glGenTextures(1, &textureID);
+        glBindTexture(GL_TEXTURE_2D, textureID);
 
-    // Configura os filtros de redimensionamento (suavização)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, textureID);
+    }
 
-    // Evita problemas de alinhamento de memória entre OpenCV e OpenGL
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-
-    // Faz o upload dos pixels da memória RAM (OpenCV) para a VRAM (Placa de Vídeo/OpenGL)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, imagemConvertida.cols, imagemConvertida.rows, 0, GL_RGBA, GL_UNSIGNED_BYTE, imagemConvertida.ptr());
 
     return textureID;
@@ -246,35 +253,21 @@ int main() {
     int total_V = 0;
     int total_O = 0;
     
-    //Leitura as imagens
-    Mat branco = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/branca.jpg", IMREAD_COLOR);
-    Mat manchas = imread("C:/Users/phlea/Downloads/IFSC/PIE/PI-Esteira_Separadora/imagens/manchas.jpg", IMREAD_COLOR);
-    if (branco.empty() || manchas.empty()) {
-        cerr << "Erro ao carregar as imagens!" << endl;
-        return -1;
-    }
-
-    Mat brancoGray, manchasGray, diferenca, mascara;
-    cvtColor(branco, brancoGray, COLOR_BGR2GRAY);
-    cvtColor(manchas, manchasGray, COLOR_BGR2GRAY);
-    absdiff(brancoGray, manchasGray, diferenca);
-    threshold(diferenca, mascara, 30, 255, THRESH_BINARY);
-
-    vector<vector<Point>> contornos;
-    findContours(mascara, contornos, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-
-    Mat resultado = manchas.clone();
-    drawContours(resultado, contornos, -1, Scalar(0, 0, 255), 2);
-
     // Inicializa a janela
     GLFWwindow* window = StartWindow(800, 600, "Sistema de filtragem de vidro para reciclagem");
     if (!window) return -1;
 
     startImGui(window);
 
-    GLuint textureBranco = CVtoGL(branco);
-    GLuint textureManchas = CVtoGL(manchas);
-    GLuint textureResultado = CVtoGL(resultado);
+    // Chama a imagem da câmera (0 = Padrão notebook)
+    VideoCapture cap(0);
+    if (!cap.isOpened()) {
+        cerr << "Erro ao abrir a câmera!" << endl;
+        // Não vamos encerrar o programa, pois a interface gráfica ainda pode ser útil
+        // para testar botões, mas na vida real você trataria isso.
+    }
+    GLuint textureCamera = 0; // ID da textura - começa em 0
+    Mat frame;
 
     // Cor de fundo da janela
     ImVec4 clear_color = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
@@ -286,6 +279,11 @@ int main() {
         double tempoAtual = glfwGetTime();
         if (estadoEsteira == true){ 
             tempoOperacao += (tempoAtual - tempoJanela);
+
+            if (cap.isOpened()){
+                cap >> frame;
+                UpdateGLTexture(textureCamera, frame);
+            }
         }
         tempoJanela = tempoAtual;
         
@@ -298,7 +296,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureBranco, textureManchas, textureResultado, (int)contornos.size(), estadoEsteira, tempoOperacao, deteccao, total_V, total_O);
+        desenharInterface(textureCamera, 0, estadoEsteira, tempoOperacao, deteccao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
@@ -315,6 +313,11 @@ int main() {
 
         // Troca os buffers da janela
         glfwSwapBuffers(window);
+    }
+
+    //Encerra a câmera
+    if (cap.isOpened()) {
+        cap.release();
     }
 
     EndOperation(window);
