@@ -76,12 +76,12 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint textCamera, int numContornos, bool& estadoEsteira, double tempo, int& deteccao, int& total_V, int& total_O) {
+void desenharInterface(GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& deteccao, int& total_V, int& total_O) {
 
     // Autores
     SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
     SetNextWindowSize(ImVec2(150, 120), ImGuiCond_Once);
-    Begin("Autores:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    Begin("Autores:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
     Separator();
     Text("  João Victor");
     Text("  Paulo Henrique");
@@ -106,35 +106,36 @@ void desenharInterface(GLuint textCamera, int numContornos, bool& estadoEsteira,
 
     // Câmera ao vivo
     SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
-    SetNextWindowSize(ImVec2(750, 550), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(750, 530), ImGuiCond_Once);
     Begin("Live camera", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
     
-    if (estadoEsteira){
+    if (estadoCamera){
         if (textCamera){
             SetCursorPosX((750 - 640) * 0.5f); // Centraliza a imagem da câmera
             Image((void*)(intptr_t)textCamera, ImVec2(640, 480));
         } else {
-            SetCursorPosY((550 - 20) * 0.5f); // Centraliza o texto
+            SetCursorPosY((530 - 20) * 0.5f); // Centraliza o texto
             TextoCentralizado("Sem sinal de imagem.");
         }
     } else {
-        SetCursorPosY((550 - 20) * 0.5f); // Centraliza o texto
-        TextoCentralizado("Pressione START para iniciar o sistema.");
+        SetCursorPosY((530 - 20) * 0.5f); // Centraliza o texto
+        TextoCentralizado("Câmera desligada, aguardando comando.");
     }
 
     End();
    
     // Botão de controle da esteira
-    ImGuiWindowFlags flagsBotao = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
-    SetNextWindowPos(ImVec2(1180, 60), ImGuiCond_Once);
+    ImGuiWindowFlags flagsBotaoE = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    SetNextWindowPos(ImVec2(1180, 70), ImGuiCond_Once);
     SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
-    Begin("Interface de Controle da Esteira", NULL, flagsBotao);
+    Begin("Interface de Controle da Esteira", NULL, flagsBotaoE);
     PushStyleVar(ImGuiStyleVar_FrameRounding, 25.0f); 
     if (estadoEsteira == true){
         PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
         if (Button("STOP", ImVec2(130, 50))) {
             estadoEsteira = false;
+            estadoCameraAnterior = false;
         }
         PopStyleColor(2);
     } else {
@@ -146,6 +147,72 @@ void desenharInterface(GLuint textCamera, int numContornos, bool& estadoEsteira,
         PopStyleColor(2);
     }
     PopStyleVar(1);
+    End();
+
+    // Botão de controle da câmera
+    ImGuiWindowFlags flagsBotaoC = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    SetNextWindowPos(ImVec2(1180, 280), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
+    Begin("Interface de Controle da Câmera", NULL, flagsBotaoC);
+    PushStyleVar(ImGuiStyleVar_FrameRounding, 25.0f); 
+    if (estadoCamera == true){
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+        if (Button("Câmera", ImVec2(130, 50))) {
+            estadoCamera = false;
+        }
+        PopStyleColor(2);
+    } else {
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
+        if (Button("Câmera", ImVec2(130, 50))) {
+            estadoCamera = true;
+        }
+        PopStyleColor(2);
+    }
+    PopStyleVar(1);
+    End();
+
+    // Botão de controle da luz
+    ImGuiWindowFlags flagsBotaoL = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse;
+    SetNextWindowPos(ImVec2(1180, 360), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
+    Begin("Interface de Controle da Luz", NULL, flagsBotaoL);
+    PushStyleVar(ImGuiStyleVar_FrameRounding, 25.0f); 
+    
+    if (estadoLuz == true){
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Preto
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        
+        if (Button("Iluminação", ImVec2(130, 50))) {
+            estadoLuz = false;
+        }
+        PopStyleColor(2); 
+    } else {
+        PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Texto Preto
+        PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Amarelo
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
+        
+        if (Button("Iluminação", ImVec2(130, 50))) { 
+            estadoLuz = true;
+        }
+        PopStyleColor(3); 
+    }
+    
+    PopStyleVar(1);
+    End();
+
+    //Referência
+    SetNextWindowPos(ImVec2(770, 380), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(400, 160), ImGuiCond_Once);
+    Begin("Imagem de Referência", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+    if (estadoEsteira && textReferencia){
+        SetCursorPosX((400 - 320) * 0.5f); // Centraliza a imagem da referência
+        Image((void*)(intptr_t)textReferencia, ImVec2(320, 120));
+    } else {
+        SetCursorPosY((160 - 20) * 0.5f); // Centraliza o texto
+        TextoCentralizado("Inicie a esteira para capturar a referência.");
+    }
     End();
 
     //Status da esteira
@@ -246,7 +313,12 @@ GLuint UpdateGLTexture(GLuint& textureID, const Mat& mat) {
 int main() {
 
     // Variáveis
+    bool estadoCamera = false;
+    bool estadoCameraAnterior = false;
     bool estadoEsteira = false;
+    bool Referencia = false;
+    bool estadoLuz = false;
+
     double tempoOperacao = 0.0;
     double tempoJanela = glfwGetTime();
     int deteccao = 0;
@@ -263,11 +335,10 @@ int main() {
     VideoCapture cap(0);
     if (!cap.isOpened()) {
         cerr << "Erro ao abrir a câmera!" << endl;
-        // Não vamos encerrar o programa, pois a interface gráfica ainda pode ser útil
-        // para testar botões, mas na vida real você trataria isso.
     }
     GLuint textureCamera = 0; // ID da textura - começa em 0
-    Mat frame;
+    GLuint textureReferencia = 0; // ID da referência - começa em 0
+    Mat frame, frameReferencia;
 
     // Cor de fundo da janela
     ImVec4 clear_color = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
@@ -275,17 +346,32 @@ int main() {
     // Loop principal de exibição
     while (!glfwWindowShouldClose(window)) {
 
-        // Lógica botão
+        //captura de frame de referência
+        if (estadoCamera == true && estadoCameraAnterior == false){
+            Referencia = true;
+        }
+        estadoCameraAnterior = estadoCamera;
+
+        // Botão esteira
         double tempoAtual = glfwGetTime();
         if (estadoEsteira == true){ 
             tempoOperacao += (tempoAtual - tempoJanela);
 
+            if (Referencia == true){
+                    frameReferencia = frame.clone();
+                    UpdateGLTexture(textureReferencia, frameReferencia);
+                    Referencia = false;
+                }
+        }
+        tempoJanela = tempoAtual;
+
+        // Botão câmera
+        if (estadoCamera == true){
             if (cap.isOpened()){
                 cap >> frame;
                 UpdateGLTexture(textureCamera, frame);
             }
         }
-        tempoJanela = tempoAtual;
         
         // Processa eventos do GLFW
         glfwPollEvents();
@@ -296,7 +382,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureCamera, 0, estadoEsteira, tempoOperacao, deteccao, total_V, total_O);
+        desenharInterface(textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, deteccao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
@@ -316,9 +402,7 @@ int main() {
     }
 
     //Encerra a câmera
-    if (cap.isOpened()) {
-        cap.release();
-    }
+    if (cap.isOpened())  cap.release();
 
     EndOperation(window);
 
