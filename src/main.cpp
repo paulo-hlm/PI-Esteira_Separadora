@@ -102,7 +102,7 @@ const char* NomeEstado(Estados estado) {
     }
 }
 
-void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira){
+void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& deteccao, int& total_V, int& tota_O){
     switch (_estado){
 
         case PREPARACAO:
@@ -135,7 +135,66 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         break;
 
         case SEMPECA:
+            if (!estadoEsteira){
+                _estado = ESTEIRAOFF;
+                _estadoAnterior = SEMPECA;
+            }
+            // --- LÓGICA DE VISÃO COMPUTACIONAL (BACKLIGHT) ---
+            if (!frame.empty() && !frameReferencia.empty()) {
+                Mat grayAtual, grayRef, diff, thresh;
 
+                // 1. Converte ambos para escala de cinza
+                cvtColor(frame, grayAtual, COLOR_BGR2GRAY);
+                cvtColor(frameReferencia, grayRef, COLOR_BGR2GRAY);
+
+                // 2. Aplica desfoque para suavizar ruídos da esteira
+                GaussianBlur(grayAtual, grayAtual, Size(5, 5), 0);
+                GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
+
+                // 3. Subtração absoluta entre o fundo estático e o frame com o caco
+                absdiff(grayRef, grayAtual, diff);
+
+                // 4. Limiarização (Binarização) para isolar apenas as silhuetas significativas
+                threshold(diff, thresh, 30, 255, THRESH_BINARY);
+
+                // 5. Encontra os contornos dos cacos na esteira
+                vector<vector<Point>> contornos;
+                cv::findContours(thresh, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+                numContornos = 0;
+                for (size_t i = 0; i < contornos.size(); i++) {
+                    
+                    // Cria uma máscara para isolar a silhueta do contorno atual
+                    Mat mascara = Mat::zeros(thresh.size(), CV_8UC1);
+                    cv::drawContours(mascara, contornos, (int)i, Scalar(255), FILLED);
+                    
+                    // Calcula a área exata contando os pixéis da máscara (Evita problemas do IntelliSense)
+                    double area = (double)cv::countNonZero(mascara);
+                    
+                    // Filtra ruídos pequenos por área mínima
+                    if (area > 500) { 
+                        numContornos++;
+                        
+                        // Desenha o contorno verde ao vivo na câmera
+                        cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
+
+                        // --- CLASSIFICAÇÃO DA INTENSIDADE (VIDRO vs DESCARTE) ---
+                        // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
+                        Scalar mediaBrilho = cv::mean(grayAtual, mascara);
+
+                        if (mediaBrilho[0] > 120) { 
+                            deteccao = 1; // Vidro (Transparente)
+                        } else {
+                            deteccao = 2; // Descarte (Opaco)
+                        }
+                    }
+                }
+
+                // Se nenhum contorno relevante foi achado no frame, zera a detecção momentânea
+                if (numContornos == 0) {
+                    deteccao = 0;
+                }
+            }
         break;
 
         case ERRO:
@@ -435,6 +494,7 @@ int main() {
     int deteccao = 0;
     int total_V = 0;
     int total_O = 0;
+    int numContornos = 0;
 
     Estados _estado = PREPARACAO;
     Estados _estadoAnterior = PREPARACAO;
@@ -483,11 +543,14 @@ int main() {
         if (estadoCamera == true){
             if (cap.isOpened()){
                 cap >> frame;
-                UpdateGLTexture(textureCamera, frame);
             }
         }
     
-        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira);
+        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, numContornos, deteccao, total_V, total_O);
+
+        if (estadoCamera == true && (!frame.empty())){
+            UpdateGLTexture(textureCamera, frame);
+        }
 
         // Processa eventos do GLFW
         glfwPollEvents();
