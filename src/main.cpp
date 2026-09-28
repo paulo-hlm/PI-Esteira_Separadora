@@ -75,8 +75,86 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
     ImGui::TextColored(cor, "%s", texto);
 }
 
+// Estados
+enum Estados {
+    PREPARACAO,
+    CAMERAON,
+    ESTEIRAOFF,
+    SEMPECA,
+    PECAIDENTIFICADA,
+    VIDRO,
+    DESCARTE,
+    ERRO
+};
+
+// Auxiliar para ter o texto do estado
+const char* NomeEstado(Estados estado) {
+    switch (estado) {
+        case PREPARACAO:       return "PREPARACAO";
+        case CAMERAON:         return "CAMERAON";
+        case ESTEIRAOFF:       return "ESTEIRAOFF";
+        case SEMPECA:          return "SEMPECA";
+        case PECAIDENTIFICADA: return "PECAIDENTIFICADA";
+        case VIDRO:            return "VIDRO";
+        case DESCARTE:         return "DESCARTE";
+        case ERRO:             return "ERRO";
+        default:               return "DESCONHECIDO";
+    }
+}
+
+void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira){
+    switch (_estado){
+
+        case PREPARACAO:
+            if (!estadoCamera || !estadoLuz ){
+                estadoEsteira = false;
+            }
+            if (estadoCamera){
+                _estado = CAMERAON;
+            }
+            break;
+
+        case CAMERAON:
+            if (!estadoLuz){
+                estadoEsteira = false;
+            } else {
+                _estado = ESTEIRAOFF;
+                _estadoAnterior = CAMERAON;
+            }
+            if (!estadoCamera){
+                _estado = PREPARACAO;
+                _estadoAnterior = CAMERAON;
+            }
+        break;
+
+        case ESTEIRAOFF:
+            if (estadoEsteira){
+                _estado = SEMPECA;
+                _estadoAnterior = ESTEIRAOFF;
+            }
+        break;
+
+        case SEMPECA:
+
+        break;
+
+        case ERRO:
+            estadoEsteira = false;
+        break;
+    }    
+}
+
 // Renderização da interface do ImGui:
-void desenharInterface(GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& deteccao, int& total_V, int& total_O) {
+void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& deteccao, int& total_V, int& total_O) {
+
+    // Estados
+    SetNextWindowPos(ImVec2(1180, 450), ImGuiCond_Once);
+    SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
+    Begin("Estados:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+    TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "%s", NomeEstado(_estado));
+    Separator();
+    TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", NomeEstado(_estadoAnterior));
+    End();
 
     // Autores
     SetNextWindowPos(ImVec2(1180, 150), ImGuiCond_Once);
@@ -142,7 +220,11 @@ void desenharInterface(GLuint textCamera, GLuint textReferencia, int numContorno
         PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
         if (Button("START", ImVec2(130, 50))) {
-            estadoEsteira = true;
+            if ((_estado == PREPARACAO && (!estadoCamera || !estadoLuz)) || (_estado == CAMERAON && (!estadoLuz))){
+                _estado = ERRO;
+            } else {
+                estadoEsteira = true;
+            }
         }
         PopStyleColor(2);
     }
@@ -181,22 +263,22 @@ void desenharInterface(GLuint textCamera, GLuint textReferencia, int numContorno
     PushStyleVar(ImGuiStyleVar_FrameRounding, 25.0f); 
     
     if (estadoLuz == true){
-        PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Preto
-        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
-        
-        if (Button("Iluminação", ImVec2(130, 50))) {
-            estadoLuz = false;
-        }
-        PopStyleColor(2); 
-    } else {
         PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Texto Preto
         PushStyleColor(ImGuiCol_Button, ImVec4(1.0f, 1.0f, 0.0f, 1.0f)); // Amarelo
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
         
+        if (Button("Iluminação", ImVec2(130, 50))) {
+            estadoLuz = false;
+        }
+        PopStyleColor(3); 
+    } else {
+        PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 1.0f)); // Preto
+        PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
+        
         if (Button("Iluminação", ImVec2(130, 50))) { 
             estadoLuz = true;
         }
-        PopStyleColor(3); 
+        PopStyleColor(2); 
     }
     
     PopStyleVar(1);
@@ -267,6 +349,35 @@ void desenharInterface(GLuint textCamera, GLuint textReferencia, int numContorno
     Text("Número de objetos opacos detectados: %d", total_O);
     Separator();
     End();
+
+    // Mensagem de erro
+    if (_estado == ERRO) {
+        OpenPopup("Erro");
+    }    
+
+    if(BeginPopupModal("Erro", NULL, ImGuiWindowFlags_AlwaysAutoResize)){
+        if (_estadoAnterior == PREPARACAO || _estadoAnterior == ERRO) {
+            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira, a câmera e a iluminação devem estar ligadas.");
+            Spacing();
+            SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
+            if (Button("OK", ImVec2(120, 0))) {
+                _estado = PREPARACAO;
+                _estadoAnterior = ERRO;
+                CloseCurrentPopup();
+            }
+        } else if (_estadoAnterior == CAMERAON || _estadoAnterior == ERRO) {
+            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a iluminação deve estar ligada.");
+            Spacing();
+            SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
+            if (Button("OK", ImVec2(120, 0))) {
+                _estado = CAMERAON;
+                _estadoAnterior = ERRO;
+                CloseCurrentPopup();
+            }
+        }
+        EndPopup();
+    }
+
 }
 
 // Limpeza e encerramento do ImGui:
@@ -324,6 +435,9 @@ int main() {
     int deteccao = 0;
     int total_V = 0;
     int total_O = 0;
+
+    Estados _estado = PREPARACAO;
+    Estados _estadoAnterior = PREPARACAO;
     
     // Inicializa a janela
     GLFWwindow* window = StartWindow(800, 600, "Sistema de filtragem de vidro para reciclagem");
@@ -372,7 +486,9 @@ int main() {
                 UpdateGLTexture(textureCamera, frame);
             }
         }
-        
+    
+        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira);
+
         // Processa eventos do GLFW
         glfwPollEvents();
 
@@ -382,7 +498,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, deteccao, total_V, total_O);
+        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, deteccao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
