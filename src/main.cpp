@@ -6,6 +6,9 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 
+#define contraste = 120;
+#define tamMinimo = 500;
+
 using namespace std;
 using namespace cv;
 using namespace ImGui;
@@ -105,6 +108,7 @@ const char* NomeEstado(Estados estado) {
 void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& deteccao, int& total_V, int& tota_O){
     switch (_estado){
 
+        // Estado inicial, a interface foi gerada mas nenhuma ação foi tomada
         case PREPARACAO:
             if (!estadoCamera || !estadoLuz ){
                 estadoEsteira = false;
@@ -114,6 +118,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             }
             break;
 
+        // A câmera foi iniciada e a imagem está sendo mostrada na tela
         case CAMERAON:
             if (!estadoLuz){
                 estadoEsteira = false;
@@ -127,6 +132,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             }
         break;
 
+        // A câmera e a iluminação estão ligadas, aguarda apenas o comando da esteira
         case ESTEIRAOFF:
             if (estadoEsteira){
                 _estado = SEMPECA;
@@ -134,12 +140,14 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             }
         break;
 
+        // A esteira foi iniciada e o sistema de visão entrou em operação
+        // envia sinal para a catraca até que identifique um contorno fechado
         case SEMPECA:
             if (!estadoEsteira){
                 _estado = ESTEIRAOFF;
                 _estadoAnterior = SEMPECA;
             }
-            // --- LÓGICA DE VISÃO COMPUTACIONAL (BACKLIGHT) ---
+            // Visão
             if (!frame.empty() && !frameReferencia.empty()) {
                 Mat grayAtual, grayRef, diff, thresh;
 
@@ -151,10 +159,10 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                 GaussianBlur(grayAtual, grayAtual, Size(5, 5), 0);
                 GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
 
-                // 3. Subtração absoluta entre o fundo estático e o frame com o caco
+                // 3. Subtração absoluta entre refrência e frame atual
                 absdiff(grayRef, grayAtual, diff);
 
-                // 4. Limiarização (Binarização) para isolar apenas as silhuetas significativas
+                // 4. Limiarização para isolar apenas as silhuetas significativas
                 threshold(diff, thresh, 30, 255, THRESH_BINARY);
 
                 // 5. Encontra os contornos dos cacos na esteira
@@ -172,7 +180,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                     double area = (double)cv::countNonZero(mascara);
                     
                     // Filtra ruídos pequenos por área mínima
-                    if (area > 500) { 
+                    if (area > tamMinimo) { 
                         numContornos++;
                         
                         // Desenha o contorno verde ao vivo na câmera
@@ -182,7 +190,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                         // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
                         Scalar mediaBrilho = cv::mean(grayAtual, mascara);
 
-                        if (mediaBrilho[0] > 120) { 
+                        if (mediaBrilho[0] > contraste) { 
                             deteccao = 1; // Vidro (Transparente)
                         } else {
                             deteccao = 2; // Descarte (Opaco)
@@ -197,6 +205,20 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             }
         break;
 
+        // Classifica o contorno baseado em contraste e adiciona ao contador
+        // Envia sinal para fechar a catraca e orientar o separador
+        case VIDRO:
+
+        break;
+
+        // Classifica o contorno baseado em contraste e adiciona ao contador
+        // Envia sinal para fechar a catraca e orientar o separador
+        case DESCARTE:
+
+        break;
+
+        // Gera mensagens de erro e orientações
+        // Trava a esteira
         case ERRO:
             estadoEsteira = false;
         break;
