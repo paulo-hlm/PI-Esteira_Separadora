@@ -6,8 +6,8 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 
-#define contraste = 120;
-#define tamMinimo = 500;
+#define contraste = 120
+#define tamMinimo = 500
 
 using namespace std;
 using namespace cv;
