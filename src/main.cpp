@@ -91,10 +91,11 @@ enum Estados {
 };
 
 // Auxiliar para ter o texto do estado
-const char* NomeEstado(Estados estado) {
+const char* status(Estados estado) {
     switch (estado) {
         case PREPARACAO:       return "PREPARACAO";
         case CAMERAON:         return "CAMERAON";
+        case LUZON:            return "LUZON";
         case ESTEIRAOFF:       return "ESTEIRAOFF";
         case SEMPECA:          return "SEMPECA";
         case PECAIDENTIFICADA: return "PECAIDENTIFICADA";
@@ -105,116 +106,131 @@ const char* NomeEstado(Estados estado) {
     }
 }
 
-void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& deteccao, int& total_V, int& tota_O){
+void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& total_V, int& tota_O){
     switch (_estado){
 
-        // Estado inicial, a interface foi gerada mas nenhuma ação foi tomada
-        case PREPARACAO:
-            if (!estadoCamera || !estadoLuz ){
-                estadoEsteira = false;
-            }
-            if (estadoCamera){
-                _estado = CAMERAON;
-            }
-            break;
+        bool pecadetectada = false;
+        int tipo = 0; // 0 - nada; 1 - vidro; 2 - descarte;
+        
+        // Visão
+        if (estadoEsteira && !frame.empty() && !frameReferencia.empty()) {
+            Mat grayAtual, grayRef, diff, thresh;
+            
+            // 1. Converte ambos para escala de cinza
+            cvtColor(frame, grayAtual, COLOR_BGR2GRAY);
+            cvtColor(frameReferencia, grayRef, COLOR_BGR2GRAY);
+        
+            // 2. Aplica desfoque para suavizar ruídos da esteira
+            GaussianBlur(grayAtual, grayAtual, Size(5, 5), 0);
+            GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
 
-        // A câmera foi iniciada e a imagem está sendo mostrada na tela
-        case CAMERAON:
-            if (!estadoLuz){
-                estadoEsteira = false;
-            } else {
-                _estado = ESTEIRAOFF;
-                _estadoAnterior = CAMERAON;
-            }
-            if (!estadoCamera){
-                _estado = PREPARACAO;
-                _estadoAnterior = CAMERAON;
-            }
-        break;
+            // 3. Subtração absoluta entre refrência e frame atual
+            absdiff(grayRef, grayAtual, diff);
 
-        // A câmera e a iluminação estão ligadas, aguarda apenas o comando da esteira
-        case ESTEIRAOFF:
-            if (estadoEsteira){
-                _estado = SEMPECA;
-                _estadoAnterior = ESTEIRAOFF;
-            }
-        break;
+            // 4. Limiarização para isolar apenas as silhuetas significativas
+            threshold(diff, thresh, 30, 255, THRESH_BINARY);
 
-        // A esteira foi iniciada e o sistema de visão entrou em operação
-        // envia sinal para a catraca até que identifique um contorno fechado
-        case SEMPECA:
-            if (!estadoEsteira){
-                _estado = ESTEIRAOFF;
-                _estadoAnterior = SEMPECA;
-            }
-            // Visão
-            if (!frame.empty() && !frameReferencia.empty()) {
-                Mat grayAtual, grayRef, diff, thresh;
+            // 5. Encontra os contornos dos cacos na esteira
+            vector<vector<Point>> contornos;
+            cv::findContours(thresh, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-                // 1. Converte ambos para escala de cinza
-                cvtColor(frame, grayAtual, COLOR_BGR2GRAY);
-                cvtColor(frameReferencia, grayRef, COLOR_BGR2GRAY);
-
-                // 2. Aplica desfoque para suavizar ruídos da esteira
-                GaussianBlur(grayAtual, grayAtual, Size(5, 5), 0);
-                GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
-
-                // 3. Subtração absoluta entre refrência e frame atual
-                absdiff(grayRef, grayAtual, diff);
-
-                // 4. Limiarização para isolar apenas as silhuetas significativas
-                threshold(diff, thresh, 30, 255, THRESH_BINARY);
-
-                // 5. Encontra os contornos dos cacos na esteira
-                vector<vector<Point>> contornos;
-                cv::findContours(thresh, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-
-                numContornos = 0;
-                for (size_t i = 0; i < contornos.size(); i++) {
+            numContornos = 0;
+            for (size_t i = 0; i < contornos.size(); i++) {
                     
-                    // Cria uma máscara para isolar a silhueta do contorno atual
-                    Mat mascara = Mat::zeros(thresh.size(), CV_8UC1);
-                    cv::drawContours(mascara, contornos, (int)i, Scalar(255), FILLED);
+            // Cria uma máscara para isolar a silhueta do contorno atual
+                Mat mascara = Mat::zeros(thresh.size(), CV_8UC1);
+                cv::drawContours(mascara, contornos, (int)i, Scalar(255), FILLED);
+                
+                // Calcula a área exata contando os pixéis da máscara (Evita problemas do IntelliSense)
+                double area = (double)cv::countNonZero(mascara);
                     
-                    // Calcula a área exata contando os pixéis da máscara (Evita problemas do IntelliSense)
-                    double area = (double)cv::countNonZero(mascara);
+                // Filtra ruídos pequenos por área mínima
+                if (area > tamMinimo) { 
+                    numContornos++;
+                    pecadetectada = true;
                     
-                    // Filtra ruídos pequenos por área mínima
-                    if (area > tamMinimo) { 
-                        numContornos++;
-                        
-                        // Desenha o contorno verde ao vivo na câmera
-                        cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
+                    // Desenha o contorno verde ao vivo na câmera
+                    cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
 
-                        // --- CLASSIFICAÇÃO DA INTENSIDADE (VIDRO vs DESCARTE) ---
-                        // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
-                        Scalar mediaBrilho = cv::mean(grayAtual, mascara);
-
-                        if (mediaBrilho[0] > contraste) { 
-                            deteccao = 1; // Vidro (Transparente)
-                        } else {
-                            deteccao = 2; // Descarte (Opaco)
-                        }
+                    // --- CLASSIFICAÇÃO DA INTENSIDADE (VIDRO vs DESCARTE) ---
+                    // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
+                    Scalar mediaBrilho = cv::mean(grayAtual, mascara);
+                    
+                    if (mediaBrilho[0] > contraste) { 
+                        tipo = 1; // Vidro (Transparente)
+                    } else {
+                        tipo = 2; // Descarte (Opaco)
                     }
                 }
+            }
 
                 // Se nenhum contorno relevante foi achado no frame, zera a detecção momentânea
                 if (numContornos == 0) {
                     deteccao = 0;
                 }
             }
+
+        
+        // Estado inicial, a interface foi gerada mas nenhuma ação foi tomada
+        case PREPARACAO:
+            estadoCamera = false;
+            estadoLuz = false;
+            estadoEsteira = false;
+            break;
+
+        // A câmera foi iniciada e a imagem está sendo mostrada na tela
+        case CAMERAON:
+            estadoCamera = true;
+            estadoLuz = false;
+            estadoEsteira = false;
+        break;
+
+        case LUZON:
+            estadoCamera = false;
+            estadoLuz = true;
+            estadoEsteira = false;
+        break;
+        
+        // A câmera e a iluminação estão ligadas, aguarda apenas o comando da esteira
+        case ESTEIRAOFF:
+            estadoCamera = true;
+            estadoLuz = true;
+            estadoEsteira = false;
+        break;
+
+        // A esteira foi iniciada e o sistema de visão entrou em operação
+        // envia sinal para a catraca até que identifique um contorno fechado
+        case SEMPECA:
+            
+            estadoCamera = true;
+            estadoLuz = true;
+            estadoEsteira = true;
+            
+            if (tipo == 1){
+                _estado = VIDRO;
+                _estadoAnterior = SEMPECA;
+            }
+            if (tipo == 2){
+                _estado = DESCARTE;
+                _estadoAnterior = SEMPECA;
+            }
         break;
 
         // Classifica o contorno baseado em contraste e adiciona ao contador
         // Envia sinal para fechar a catraca e orientar o separador
         case VIDRO:
-
+            total_V++;
+            if (tipo == 0) {
+                _estado = SEMPECA;
+                _estadoAnterior = VIDRO;
         break;
 
         // Classifica o contorno baseado em contraste e adiciona ao contador
         // Envia sinal para fechar a catraca e orientar o separador
         case DESCARTE:
-
+            total_O++;            
+            _estado = SEMPECA;
+            _estadoAnterior = DESCARTE;
         break;
 
         // Gera mensagens de erro e orientações
@@ -226,15 +242,15 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& deteccao, int& total_V, int& total_O) {
+void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& total_V, int& total_O) {
 
     // Estados
     SetNextWindowPos(ImVec2(1180, 450), ImGuiCond_Once);
     SetNextWindowSize(ImVec2(150, 80), ImGuiCond_Once);
     Begin("Estados:", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-    TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "%s", NomeEstado(_estado));
+    TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "%s", status(_estado));
     Separator();
-    TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", NomeEstado(_estadoAnterior));
+    TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", status(_estadoAnterior));
     End();
 
     // Autores
@@ -293,7 +309,8 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
         if (Button("STOP", ImVec2(130, 50))) {
-            estadoEsteira = false;
+            _estadoAnterior = _estado;
+            _estado = ESTEIRAOFF;
             estadoCameraAnterior = false;
         }
         PopStyleColor(2);
@@ -301,10 +318,11 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
         if (Button("START", ImVec2(130, 50))) {
-            if ((_estado == PREPARACAO && (!estadoCamera || !estadoLuz)) || (_estado == CAMERAON && (!estadoLuz))){
-                _estado = ERRO;
+            if ((_estado == ESTEIRAOFF){
+                _estado = SEMPECA;
+                _estadoAnterior = ESTEIRAOFF;
             } else {
-                estadoEsteira = true;
+                _estado = ERRO;
             }
         }
         PopStyleColor(2);
@@ -322,14 +340,29 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
         if (Button("Câmera", ImVec2(130, 50))) {
-            estadoCamera = false;
+            if (_estado == ESTEIRAOFF){
+                _estadoAnterior = ESTEIRAOFF;
+                _estado = LUZON;
+            } else if (_estado == CAMERAON){
+                _estadoAnterior = CAMERAON;
+                _estado = PREPARACAO;
+            } else {
+                _estadoAnterior = _estado;
+                _estado = ERRO;
+            }
         }
         PopStyleColor(2);
     } else {
         PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
         if (Button("Câmera", ImVec2(130, 50))) {
-            estadoCamera = true;
+            if (_estado == PREPARACAO){
+                _estadoAnterior = PREPARACAO;
+                _estado = CAMERAON;
+            } else if (_estado == LUZON){
+                _estadoAnterior = LUZON;
+                _estado = ESTEIRAOFF;
+            } 
         }
         PopStyleColor(2);
     }
@@ -349,7 +382,16 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
         
         if (Button("Iluminação", ImVec2(130, 50))) {
-            estadoLuz = false;
+            if (_estado == ESTEIRAOFF){
+                _estadoAnterior = ESTEIRAOFF;
+                _estado = CAMERAON;
+            } else if (_estado == LUZON){
+                _estadoAnterior = LUZON;
+                _estado = PREPARACAO;
+            } else {
+                _estadoAnterior = _estado;
+                _estado = ERRO;
+            }
         }
         PopStyleColor(3); 
     } else {
@@ -357,7 +399,13 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
         
         if (Button("Iluminação", ImVec2(130, 50))) { 
-            estadoLuz = true;
+            if (_estado == PREPARACAO){
+                _estadoAnterior = PREPARACAO;
+                _estado = LUZON;
+            } else if (_estado == CAMERAON){
+                _estadoAnterior = CAMERAON;
+                _estado = ESTEIRAOFF;
+            } 
         }
         PopStyleColor(2); 
     }
@@ -388,34 +436,34 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
     if (estadoEsteira == false) {
         Text("Inicie a esteira para iniciar a operação");
     } else {
-        if (deteccao == 0) {
+        if (_estado == SEMPECA) {
         Text("Aguardando Imagem");
-        } else if (deteccao == 1) {
+        } else if (_estado == VIDRO) {
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.1f, 0.8f, 0.1f, 1.0f), "VIDRO");
-        } else if (deteccao == 2){
+        } else if (_estado == DESCARTE){
             Text("Objeto detectado:");
             SameLine();
             TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "DESCARTE");
         }
     }
-    Separator();
+    //Separator();
 
-    PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
-    PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
-        if (Button("teste", ImVec2(130, 50)) && estadoEsteira == true) {
-        if (deteccao == 0) {
-            deteccao++;
-            total_V++;
-        } else if (deteccao == 1) {
-            deteccao = 2;
-            total_O++;
-        } else {
-            deteccao = 0;
-        }
-        }
-        PopStyleColor(2);
+    //PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
+    //PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+    //    if (Button("teste", ImVec2(130, 50)) && estadoEsteira == true) {
+    //    if (deteccao == 0) {
+    //        deteccao++;
+    //        total_V++;
+    //    } else if (deteccao == 1) {
+    //        deteccao = 2;
+    //        total_O++;
+    //   } else {
+    //        deteccao = 0;
+    //    }
+    //    }
+    //    PopStyleColor(2);
 
     End();
     
@@ -513,7 +561,6 @@ int main() {
 
     double tempoOperacao = 0.0;
     double tempoJanela = glfwGetTime();
-    int deteccao = 0;
     int total_V = 0;
     int total_O = 0;
     int numContornos = 0;
@@ -568,7 +615,7 @@ int main() {
             }
         }
     
-        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, numContornos, deteccao, total_V, total_O);
+        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, numContornos, total_V, total_O);
 
         if (estadoCamera == true && (!frame.empty())){
             UpdateGLTexture(textureCamera, frame);
@@ -583,7 +630,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, deteccao, total_V, total_O);
+        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
