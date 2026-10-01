@@ -6,8 +6,8 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 
-#define contraste = 120
-#define tamMinimo = 500
+#define contraste 120
+#define tamMinimo 500
 
 using namespace std;
 using namespace cv;
@@ -82,6 +82,7 @@ void TextoColoridoCentralizado(ImVec4 cor, const char* texto) {
 enum Estados {
     PREPARACAO,
     CAMERAON,
+    LUZON,
     ESTEIRAOFF,
     SEMPECA,
     PECAIDENTIFICADA,
@@ -107,7 +108,6 @@ const char* status(Estados estado) {
 }
 
 void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& total_V, int& tota_O){
-    switch (_estado){
 
         bool pecadetectada = false;
         int tipo = 0; // 0 - nada; 1 - vidro; 2 - descarte;
@@ -170,6 +170,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                 }
             }
 
+    switch (_estado){
         
         // Estado inicial, a interface foi gerada mas nenhuma ação foi tomada
         case PREPARACAO:
@@ -209,8 +210,10 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             if (tipo == 1){
                 _estado = VIDRO;
                 _estadoAnterior = SEMPECA;
+                total_V++;
             }
             if (tipo == 2){
+                total_O++;
                 _estado = DESCARTE;
                 _estadoAnterior = SEMPECA;
             }
@@ -219,7 +222,6 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Classifica o contorno baseado em contraste e adiciona ao contador
         // Envia sinal para fechar a catraca e orientar o separador
         case VIDRO:
-            total_V++;
             if (tipo == 0) {
                 _estado = SEMPECA;
                 _estadoAnterior = VIDRO;
@@ -228,9 +230,9 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Classifica o contorno baseado em contraste e adiciona ao contador
         // Envia sinal para fechar a catraca e orientar o separador
         case DESCARTE:
-            total_O++;            
-            _estado = SEMPECA;
-            _estadoAnterior = DESCARTE;
+            if (tipo == 0) {
+                _estado = SEMPECA;
+                _estadoAnterior = DESCARTE;
         break;
 
         // Gera mensagens de erro e orientações
