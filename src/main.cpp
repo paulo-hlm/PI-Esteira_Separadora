@@ -163,11 +163,6 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                     }
                 }
             }
-
-                // Se nenhum contorno relevante foi achado no frame, zera a detecção momentânea
-                if (numContornos == 0) {
-                    deteccao = 0;
-                }
             }
 
     switch (_estado){
@@ -225,6 +220,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             if (tipo == 0) {
                 _estado = SEMPECA;
                 _estadoAnterior = VIDRO;
+            }
         break;
 
         // Classifica o contorno baseado em contraste e adiciona ao contador
@@ -233,6 +229,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             if (tipo == 0) {
                 _estado = SEMPECA;
                 _estadoAnterior = DESCARTE;
+            }
         break;
 
         // Gera mensagens de erro e orientações
@@ -320,7 +317,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f)); // Verde
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
         if (Button("START", ImVec2(130, 50))) {
-            if ((_estado == ESTEIRAOFF){
+            if (_estado == ESTEIRAOFF){
                 _estado = SEMPECA;
                 _estadoAnterior = ESTEIRAOFF;
             } else {
@@ -632,7 +629,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, 0, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, total_V, total_O);
+        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, numContornos, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
