@@ -107,7 +107,7 @@ const char* status(Estados estado) {
     }
 }
 
-void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& total_V, int& tota_O){
+void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& total_V, int& total_O){
 
         bool pecadetectada = false;
         int tipo = 0; // 0 - nada; 1 - vidro; 2 - descarte;
@@ -484,7 +484,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
     }    
 
     if(BeginPopupModal("Erro", NULL, ImGuiWindowFlags_AlwaysAutoResize)){
-        if (_estadoAnterior == PREPARACAO || _estadoAnterior == ERRO) {
+        if (_estadoAnterior == PREPARACAO) {
             TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira, a câmera e a iluminação devem estar ligadas.");
             Spacing();
             SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
@@ -493,12 +493,33 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
-        } else if (_estadoAnterior == CAMERAON || _estadoAnterior == ERRO) {
+        }
+        if (_estadoAnterior == CAMERAON) {
             TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a iluminação deve estar ligada.");
             Spacing();
             SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
             if (Button("OK", ImVec2(120, 0))) {
                 _estado = CAMERAON;
+                _estadoAnterior = ERRO;
+                CloseCurrentPopup();
+            }
+        }
+        if (_estadoAnterior == LUZON) {
+            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a câmera deve estar ligada.");
+            Spacing();
+            SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
+            if (Button("OK", ImVec2(120, 0))) {
+                _estado = LUZON;
+                _estadoAnterior = ERRO;
+                CloseCurrentPopup();
+            }
+        }
+        if (estadoEsteira == true) {
+            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a câmera e a iluminação devem estar ligadas.");
+            Spacing();
+            SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
+            if (Button("OK", ImVec2(120, 0))) {
+                _estado = ESTEIRAOFF;
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
@@ -574,7 +595,7 @@ int main() {
     startImGui(window);
 
     // Chama a imagem da câmera (0 = Padrão notebook)
-    VideoCapture cap(0);
+    VideoCapture cap(1, CAP_DSHOW);
     if (!cap.isOpened()) {
         cerr << "Erro ao abrir a câmera!" << endl;
     }
