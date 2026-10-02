@@ -6,7 +6,7 @@
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
 
-#define contraste 120
+#define contraste 100
 #define tamMinimo 500
 
 using namespace std;
@@ -148,18 +148,18 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                 if (area > tamMinimo) { 
                     numContornos++;
                     pecadetectada = true;
-                    
-                    // Desenha o contorno verde ao vivo na câmera
-                    cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
 
-                    // --- CLASSIFICAÇÃO DA INTENSIDADE (VIDRO vs DESCARTE) ---
                     // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
                     Scalar mediaBrilho = cv::mean(grayAtual, mascara);
                     
                     if (mediaBrilho[0] > contraste) { 
                         tipo = 1; // Vidro (Transparente)
+                        // circula em verde
+                    drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
                     } else {
                         tipo = 2; // Descarte (Opaco)
+                        // Circula em vermelho
+                    drawContours(frame, contornos, (int)i, Scalar(0, 0, 255), 2);
                     }
                 }
             }
@@ -235,7 +235,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Gera mensagens de erro e orientações
         // Trava a esteira
         case ERRO:
-            estadoEsteira = false;
+            
         break;
     }    
 }
@@ -321,6 +321,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
                 _estado = SEMPECA;
                 _estadoAnterior = ESTEIRAOFF;
             } else {
+                _estadoAnterior = _estado;
                 _estado = ERRO;
             }
         }
@@ -493,8 +494,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
-        }
-        if (_estadoAnterior == CAMERAON) {
+        } else if (_estadoAnterior == CAMERAON) {
             TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a iluminação deve estar ligada.");
             Spacing();
             SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
@@ -503,8 +503,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
-        }
-        if (_estadoAnterior == LUZON) {
+        } else if (_estadoAnterior == LUZON) {
             TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a câmera deve estar ligada.");
             Spacing();
             SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
@@ -513,13 +512,12 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
-        }
-        if (estadoEsteira == true) {
-            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Para iniciar a esteira a câmera e a iluminação devem estar ligadas.");
+        }else if (estadoEsteira == true) {
+            TextoColoridoCentralizado(ImVec4(1.0f, 0.0f, 0.0f, 1.0f), "Pare a esteira antes de interromper a câmera ou a iluminação.");
             Spacing();
             SetCursorPosX((GetWindowWidth() - 120) * 0.5f);
             if (Button("OK", ImVec2(120, 0))) {
-                _estado = ESTEIRAOFF;
+                _estado = _estadoAnterior;
                 _estadoAnterior = ERRO;
                 CloseCurrentPopup();
             }
