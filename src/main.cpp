@@ -1,5 +1,6 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -7,7 +8,8 @@
 #include <GLFW/glfw3.h>
 
 #define contraste 100
-#define tamMinimo 500
+#define tamMinimo 1000
+#define ruido 10
 
 using namespace std;
 using namespace cv;
@@ -107,14 +109,14 @@ const char* status(Estados estado) {
     }
 }
 
-void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, int& numContornos, int& total_V, int& total_O){
+void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool& estadoLuz, bool& estadoEsteira, Mat& frame, Mat& frameReferencia, Mat& frameDiff, Mat& frameThresh, Mat& frameMorph, int& numContornos, int& total_V, int& total_O){
 
         bool pecadetectada = false;
         int tipo = 0; // 0 - nada; 1 - vidro; 2 - descarte;
         
         // Visão
         if (estadoEsteira && !frame.empty() && !frameReferencia.empty()) {
-            Mat grayAtual, grayRef, diff, thresh;
+            Mat grayAtual, grayRef;
             
             // 1. Converte ambos para escala de cinza
             cvtColor(frame, grayAtual, COLOR_BGR2GRAY);
@@ -125,20 +127,25 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
 
             // 3. Subtração absoluta entre refrência e frame atual
-            absdiff(grayRef, grayAtual, diff);
+            subtract(grayRef, grayAtual, frameDiff);
 
             // 4. Limiarização para isolar apenas as silhuetas significativas
-            threshold(diff, thresh, 30, 255, THRESH_BINARY);
+            threshold(frameDiff, frameThresh, 30, 255, THRESH_BINARY);
 
-            // 5. Encontra os contornos dos cacos na esteira
+            // 5. Operações morfológicas para reduzir ruídos e preencher lacunas
+            Mat kernel = getStructuringElement(MORPH_RECT, Size(ruido, ruido));
+            erode(frameThresh, frameMorph, kernel);
+            dilate(frameMorph, frameMorph, kernel);
+
+            // 6. Encontra os contornos dos cacos na esteira
             vector<vector<Point>> contornos;
-            cv::findContours(thresh, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+            cv::findContours(frameMorph, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
             numContornos = 0;
             for (size_t i = 0; i < contornos.size(); i++) {
                     
             // Cria uma máscara para isolar a silhueta do contorno atual
-                Mat mascara = Mat::zeros(thresh.size(), CV_8UC1);
+                Mat mascara = Mat::zeros(frameMorph.size(), CV_8UC1);
                 cv::drawContours(mascara, contornos, (int)i, Scalar(255), FILLED);
                 
                 // Calcula a área exata contando os pixéis da máscara (Evita problemas do IntelliSense)
@@ -146,6 +153,31 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                     
                 // Filtra ruídos pequenos por área mínima
                 if (area > tamMinimo) { 
+                    
+                    // Ignora contornos finos para evitar erro da esteira 
+                    int minX = 10000, maxX = 0, minY = 10000, maxY = 0;
+                    
+                    // Varre todos os pontos do contorno atual para achar os limites extremos
+                    for (size_t p = 0; p < contornos[i].size(); p++) {
+                        if (contornos[i][p].x < minX) minX = contornos[i][p].x;
+                        if (contornos[i][p].x > maxX) maxX = contornos[i][p].x;
+                        if (contornos[i][p].y < minY) minY = contornos[i][p].y;
+                        if (contornos[i][p].y > maxY) maxY = contornos[i][p].y;
+                    }
+                    
+                    float largura = (float)(maxX - minX);
+                    float altura = (float)(maxY - minY);
+                    float proporcao = 0.0f;
+                    
+                    // Evita divisão por zero caso o ruído seja uma linha perfeitamente horizontal
+                    if (altura > 0) {
+                        proporcao = largura / altura;
+                    }
+                    if (proporcao > 0.3f && proporcao < 3.0f) {
+                        
+                        numContornos++;
+                        pecadetectada = true;
+
                     numContornos++;
                     pecadetectada = true;
 
@@ -164,6 +196,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                 }
             }
             }
+        }
 
     switch (_estado){
         
@@ -241,7 +274,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
 }
 
 // Renderização da interface do ImGui:
-void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCamera, GLuint textReferencia, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& total_V, int& total_O) {
+void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCamera, GLuint textReferencia, GLuint textDiff, GLuint textThresh, GLuint textMorph, int numContornos, bool& estadoEsteira, bool& estadoCamera, bool&estadoCameraAnterior, bool& estadoLuz, double tempo, int& total_V, int& total_O) {
 
     // Estados
     SetNextWindowPos(ImVec2(1180, 450), ImGuiCond_Once);
@@ -296,6 +329,30 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         TextoCentralizado("Câmera desligada, aguardando comando.");
     }
 
+    End();
+
+    // Debug do processamento de visão
+    SetNextWindowPos(ImVec2(10, 550), ImGuiCond_Once); 
+    SetNextWindowSize(ImVec2(780, 240), ImGuiCond_Once); // Aumentamos a largura para acomodar 3 imagens
+    Begin("Debug do Processamento de Visao");
+    
+    if (estadoEsteira && textDiff && textThresh && textMorph) {
+        Text("Subtracao (AbsDiff)");
+        SameLine(260);
+        Text("Limiar (Com Ruido)");
+        SameLine(510);
+        Text("Morfologia (Limpo)");
+        
+        // Exibe as três imagens lado a lado (Tamanho ajustado para caberem)
+        Image((void*)(intptr_t)textDiff, ImVec2(240, 180));
+        SameLine(260);
+        Image((void*)(intptr_t)textThresh, ImVec2(240, 180));
+        SameLine(510);
+        Image((void*)(intptr_t)textMorph, ImVec2(240, 180));
+    } else {
+        SetCursorPosY(100);
+        TextoCentralizado("Inicie a esteira para visualizar o processamento.");
+    }
     End();
    
     // Botão de controle da esteira
@@ -448,22 +505,6 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
             TextColored(ImVec4(0.8f, 0.1f, 0.1f, 1.0f), "DESCARTE");
         }
     }
-    //Separator();
-
-    //PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 0.0f, 1.0f));
-    //PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
-    //    if (Button("teste", ImVec2(130, 50)) && estadoEsteira == true) {
-    //    if (deteccao == 0) {
-    //        deteccao++;
-    //        total_V++;
-    //    } else if (deteccao == 1) {
-    //        deteccao = 2;
-    //        total_O++;
-    //   } else {
-    //        deteccao = 0;
-    //    }
-    //    }
-    //    PopStyleColor(2);
 
     End();
     
@@ -599,7 +640,10 @@ int main() {
     }
     GLuint textureCamera = 0; // ID da textura - começa em 0
     GLuint textureReferencia = 0; // ID da referência - começa em 0
-    Mat frame, frameReferencia;
+    GLuint textureDiff = 0; // ID da subtração - começa em 0
+    GLuint textureThresh = 0; // ID da limiarização - começa em 0
+    GLuint textureMorph = 0; // ID da morfologia - começa em 0
+    Mat frame, frameReferencia, frameDiff, frameThresh, frameMorph;
 
     // Cor de fundo da janela
     ImVec4 clear_color = ImVec4(0.15f, 0.15f, 0.15f, 1.00f);
@@ -633,10 +677,16 @@ int main() {
             }
         }
     
-        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, numContornos, total_V, total_O);
+        Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, frameDiff, frameThresh, frameMorph, numContornos, total_V, total_O);
 
         if (estadoCamera == true && (!frame.empty())){
             UpdateGLTexture(textureCamera, frame);
+        }
+
+        if (estadoEsteira == true && !frameDiff.empty() && !frameThresh.empty() && !frameMorph.empty()) {
+            UpdateGLTexture(textureDiff, frameDiff);
+            UpdateGLTexture(textureThresh, frameThresh);
+            UpdateGLTexture(textureMorph, frameMorph);
         }
 
         // Processa eventos do GLFW
@@ -648,7 +698,7 @@ int main() {
         NewFrame();
 
         // Desenha a interface do ImGui
-        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, numContornos, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, total_V, total_O);
+        desenharInterface(_estado, _estadoAnterior, textureCamera, textureReferencia, textureDiff, textureThresh, textureMorph, numContornos, estadoEsteira, estadoCamera, estadoCameraAnterior, estadoLuz, tempoOperacao, total_V, total_O);
 
         // Renderiza o ImGui
         Render();
