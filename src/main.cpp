@@ -6,10 +6,13 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <GLFW/glfw3.h>
+#include <thread>
+#include <chrono>
 
 #define contraste 100
 #define tamMinimo 1000
 #define ruido 10
+#define tempoTela 1000
 
 using namespace std;
 using namespace cv;
@@ -170,30 +173,32 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
                     float proporcao = 0.0f;
                     
                     // Evita divisão por zero caso o ruído seja uma linha perfeitamente horizontal
-                    if (altura > 0) {
-                        proporcao = largura / altura;
-                    }
+                    if (altura > 0) proporcao = largura / altura;
+
+                    bool tocaBorda = (minX <= 5 || minY <= 5 || maxX >= (frame.cols - 5) || maxY >= (frame.rows - 5));
+
                     if (proporcao > 0.3f && proporcao < 3.0f) {
                         
                         numContornos++;
                         pecadetectada = true;
 
-                    numContornos++;
-                    pecadetectada = true;
-
-                    // Calcula a média de brilho do frame atual estritamente dentro da máscara do caco
-                    Scalar mediaBrilho = cv::mean(grayAtual, mascara);
-                    
-                    if (mediaBrilho[0] > contraste) { 
-                        tipo = 1; // Vidro (Transparente)
-                        // circula em verde
-                    drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2);
-                    } else {
-                        tipo = 2; // Descarte (Opaco)
-                        // Circula em vermelho
-                    drawContours(frame, contornos, (int)i, Scalar(0, 0, 255), 2);
+                    if (tocaBorda) {
+                            // Objeto entrando ou saindo da tela. 
+                            // Desenha em amarelo (0, 255, 255 em BGR) e NÃO classifica, mantendo o tipo = 0.
+                            cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 255), 2);
+                        } else {
+                            // Objeto está 100% dentro da tela. Procede com a classificação!
+                            Scalar mediaBrilho = cv::mean(grayAtual, mascara);
+                            
+                            if (mediaBrilho[0] > contraste) { 
+                                tipo = 1; // Vidro
+                                cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2); // Verde
+                            } else {
+                                tipo = 2; // Descarte
+                                cv::drawContours(frame, contornos, (int)i, Scalar(0, 0, 255), 2); // Vermelho
+                            }
+                        }
                     }
-                }
             }
             }
         }
@@ -488,6 +493,10 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
     SetNextWindowSize(ImVec2(400, 150), ImGuiCond_Once);
     Begin("Status", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
     Text("Estado da esteira: %s", estadoEsteira ? "Ligada" : "Desligada");
+    Separator();
+    Text("Estado da câmera: %s", estadoCamera ? "Ligada" : "Desligada");
+    Separator();
+    Text("Estado da iluminação: %s", estadoLuz ? "Ligada" : "Desligada");
     Separator();
 
     if (estadoEsteira == false) {
