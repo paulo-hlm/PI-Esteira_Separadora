@@ -642,11 +642,8 @@ int main() {
 
     startImGui(window);
 
-    // Chama a imagem da câmera (0 = Padrão notebook)
-    VideoCapture cap(1, CAP_DSHOW);
-    if (!cap.isOpened()) {
-        cerr << "Erro ao abrir a câmera!" << endl;
-    }
+    VideoCapture cap;
+    
     GLuint textureCamera = 0; // ID da textura - começa em 0
     GLuint textureReferencia = 0; // ID da referência - começa em 0
     GLuint textureDiff = 0; // ID da subtração - começa em 0
@@ -660,31 +657,35 @@ int main() {
     // Loop principal de exibição
     while (!glfwWindowShouldClose(window)) {
 
-        //captura de frame de referência
-        if (estadoCamera == true && estadoCameraAnterior == false){
+        // Confere se deve tirar a ref
+        if (estadoCamera == true && estadoCameraAnterior == false) {
             Referencia = true;
+        }
+    
+        if (_estado == SEMPECA && _estadoAnterior == ESTEIRAOFF) {
+            Referencia = true; 
         }
         estadoCameraAnterior = estadoCamera;
 
-        // Botão esteira
-        double tempoAtual = glfwGetTime();
-        if (estadoEsteira == true){ 
-            tempoOperacao += (tempoAtual - tempoJanela);
-
-            if (Referencia == true){
-                    frameReferencia = frame.clone();
-                    UpdateGLTexture(textureReferencia, frameReferencia);
-                    Referencia = false;
-                }
-        }
-        tempoJanela = tempoAtual;
-
-        // Botão câmera
+        // Tira o print de refrência
         if (estadoCamera == true){
             if (cap.isOpened()){
                 cap >> frame;
             }
         }
+
+        double tempoAtual = glfwGetTime();
+        if (estadoEsteira == true){ 
+            tempoOperacao += (tempoAtual - tempoJanela);
+
+            if (Referencia == true && !frame.empty()){
+                frameReferencia = frame.clone(); 
+                UpdateGLTexture(textureReferencia, frameReferencia);
+                Referencia = false;
+            }
+        }
+        
+        tempoJanela = tempoAtual;
     
         Visao(_estado, _estadoAnterior, estadoCamera, estadoLuz, estadoEsteira, frame, frameReferencia, frameDiff, frameThresh, frameMorph, numContornos, total_V, total_O);
 
