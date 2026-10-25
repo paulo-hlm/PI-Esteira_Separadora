@@ -643,7 +643,11 @@ int main() {
     startImGui(window);
 
     // Chama a imagem da câmera (0 = Padrão notebook)
+<<<<<<< HEAD
     VideoCapture cap(0, CAP_DSHOW);
+=======
+    VideoCapture cap(1, CAP_DSHOW);
+>>>>>>> e9cd0de0c50b14344bdca96ac492ccc45fda6299
     if (!cap.isOpened()) {
         cerr << "Erro ao abrir a câmera!" << endl;
     }
