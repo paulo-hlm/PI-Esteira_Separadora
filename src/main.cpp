@@ -9,7 +9,7 @@
 #include <thread>
 #include <chrono>
 
-#define contraste 190
+#define contraste 100
 #define tamMinimo 1000
 #define ruido 10
 #define tempoTela 1000
@@ -650,7 +650,7 @@ int main() {
     GLuint textureCamera = 0; // ID da textura - começa em 0
     GLuint textureReferencia = 0; // ID da referência - começa em 0
     GLuint textureDiff = 0; // ID da subtração - começa em 0
-    GLuint textureThresh = 0; // ID da limiarização - começa em 0]
+    GLuint textureThresh = 0; // ID da limiarização - começa em 0
     GLuint textureMorph = 0; // ID da morfologia - começa em 0
     Mat frame, frameReferencia, frameDiff, frameThresh, frameMorph;
 
