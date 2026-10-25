@@ -1,6 +1,7 @@
 #include <iostream>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
+#include <windows.h>
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -9,14 +10,73 @@
 #include <thread>
 #include <chrono>
 
+#define BAUDRATE 9600
 #define contraste 100
 #define tamMinimo 1000
 #define ruido 10
 #define tempoTela 1000
 
+HANDLE hSerial;
+
 using namespace std;
 using namespace cv;
 using namespace ImGui;
+
+// Inicia a comunicação serial com a porta especificada e configura os parâmetros de comunicação
+bool InicializarSerial(const char* portaCOM, int baudRate) {
+    // Abre a conexão com a porta especificada
+    hSerial = CreateFileA(portaCOM, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    
+    if (hSerial == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    // Configura os parâmetros de comunicação (Baud Rate, 8 bits de dados, 1 stop bit, sem paridade)
+    DCB dcbSerialParams = {0};
+    dcbSerialParams.DCBlength = sizeof(dcbSerialParams);
+    
+    if (!GetCommState(hSerial, &dcbSerialParams)) {
+        CloseHandle(hSerial);
+        return false;
+    }
+
+    dcbSerialParams.BaudRate = baudRate;
+    dcbSerialParams.ByteSize = 8;
+    dcbSerialParams.StopBits = ONESTOPBIT;
+    dcbSerialParams.Parity = NOPARITY;
+
+    if (!SetCommState(hSerial, &dcbSerialParams)) {
+        CloseHandle(hSerial);
+        return false;
+    }
+
+    // Define os timeouts para garantir que a thread principal não trave
+    COMMTIMEOUTS timeouts = {0};
+    timeouts.ReadIntervalTimeout = 50;
+    timeouts.ReadTotalTimeoutConstant = 50;
+    timeouts.ReadTotalTimeoutMultiplier = 10;
+    timeouts.WriteTotalTimeoutConstant = 50;
+    timeouts.WriteTotalTimeoutMultiplier = 10;
+    
+    if (!SetCommTimeouts(hSerial, &timeouts)) {
+        CloseHandle(hSerial);
+        return false;
+    }
+
+    return true;
+}
+
+// Comando Serial
+void EnviarComandoSerial(char comando) {
+    if (hSerial != INVALID_HANDLE_VALUE) {
+        DWORD bytesEscritos;
+        
+        // Envia o caractere (1 byte) e registra o total de bytes efetivamente transmitidos
+        if (!WriteFile(hSerial, &comando, 1, &bytesEscritos, NULL)) {
+            cerr << "Erro ao enviar comando serial: " << comando << endl;
+        }
+    }
+}
 
 // Inicialização da janela:
 GLFWwindow* StartWindow(int width, int height, const char* Esteira) {
@@ -241,11 +301,15 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
             estadoEsteira = true;
             
             if (tipo == 1){
+                EnviarComandoSerial('T'); // Objeto fechado na tela: trava a catraca
+                EnviarComandoSerial('V'); // Processamento concluído: separa vidro
                 _estado = VIDRO;
                 _estadoAnterior = SEMPECA;
                 total_V++;
             }
-            if (tipo == 2){
+            else if (tipo == 2){
+                EnviarComandoSerial('T'); // Objeto fechado na tela: trava a catraca
+                EnviarComandoSerial('D'); // Processamento concluído: separa descarte
                 total_O++;
                 _estado = DESCARTE;
                 _estadoAnterior = SEMPECA;
@@ -256,6 +320,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Envia sinal para fechar a catraca e orientar o separador
         case VIDRO:
             if (tipo == 0) {
+                EnviarComandoSerial('L'); // Objeto saiu da visão: libera próxima peça
                 _estado = SEMPECA;
                 _estadoAnterior = VIDRO;
             }
@@ -265,6 +330,7 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Envia sinal para fechar a catraca e orientar o separador
         case DESCARTE:
             if (tipo == 0) {
+                EnviarComandoSerial('L'); // Objeto saiu da visão: libera próxima peça
                 _estado = SEMPECA;
                 _estadoAnterior = DESCARTE;
             }
@@ -273,7 +339,8 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         // Gera mensagens de erro e orientações
         // Trava a esteira
         case ERRO:
-            
+            EnviarComandoSerial('P'); // Garante que a esteira pare
+            EnviarComandoSerial('T'); // Garante que a catraca não libere peças
         break;
     }    
 }
@@ -370,6 +437,8 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.1f, 0.1f, 1.0f)); // Vermelho
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
         if (Button("STOP", ImVec2(130, 50))) {
+            EnviarComandoSerial('P'); // Para o motor da esteira
+            EnviarComandoSerial('T'); // Trava a catraca para reter a fila
             _estadoAnterior = _estado;
             _estado = ESTEIRAOFF;
             estadoCameraAnterior = false;
@@ -380,6 +449,8 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.2f, 1.0f, 0.2f, 1.0f));
         if (Button("START", ImVec2(130, 50))) {
             if (_estado == ESTEIRAOFF){
+                EnviarComandoSerial('E'); // Liga o motor da esteira
+                EnviarComandoSerial('L'); // Libera a entrada da primeira peça
                 _estado = SEMPECA;
                 _estadoAnterior = ESTEIRAOFF;
             } else {
@@ -579,6 +650,12 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
 
 // Limpeza e encerramento do ImGui:
 void EndOperation(GLFWwindow* window) {
+    // Fecha a porta serial com segurança
+    if (hSerial != INVALID_HANDLE_VALUE && hSerial != NULL) {
+        CloseHandle(hSerial);
+    }
+
+    // Encerra a interface gráfica
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     DestroyContext();
@@ -642,12 +719,15 @@ int main() {
 
     startImGui(window);
 
+    //Inicializa a comunicação serial
+    InicializarSerial("COM1", BAUDRATE);
+    if (!InicializarSerial("COM1", BAUDRATE)) {
+        cerr << "Falha ao abrir a porta serial!" << endl;
+        // return -1; // Não abrirá o programa se não conseguir abrir a porta serial, mas o programa ainda funciona sem a comunicação serial
+    } 
+
     // Chama a imagem da câmera (0 = Padrão notebook)
-<<<<<<< HEAD
     VideoCapture cap(0, CAP_DSHOW);
-=======
-    VideoCapture cap(1, CAP_DSHOW);
->>>>>>> e9cd0de0c50b14344bdca96ac492ccc45fda6299
     if (!cap.isOpened()) {
         cerr << "Erro ao abrir a câmera!" << endl;
     }
