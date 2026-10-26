@@ -48,3 +48,5 @@ target_include_directories(SeparadorVidro PRIVATE
 
 # 8. Linka TUDO de uma vez só no final (OpenCV, GLFW e OpenGL)
 target_link_libraries(SeparadorVidro PRIVATE ${OpenCV_LIBS} glfw opengl32)
+
+find_package(OpenCV REQUIRED)

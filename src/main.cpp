@@ -1,7 +1,14 @@
+#define NOMINMAX
+#include <windows.h>
+
 #include <iostream>
+#include <vector>
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
-#include <windows.h>
+#include <iostream>
+ 
+#include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp> 
 
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
@@ -11,9 +18,10 @@
 #include <chrono>
 
 #define BAUDRATE 9600
-#define contraste 100
-#define tamMinimo 1000
+#define contraste 20
+#define tamMinimo 500
 #define ruido 10
+#define Limiar 70
 #define tempoTela 1000
 
 HANDLE hSerial;
@@ -177,92 +185,106 @@ void Visao(Estados& _estado, Estados& _estadoAnterior, bool& estadoCamera, bool&
         bool pecadetectada = false;
         int tipo = 0; // 0 - nada; 1 - vidro; 2 - descarte;
         
-        // Visão
         if (estadoEsteira && !frame.empty() && !frameReferencia.empty()) {
-            Mat grayAtual, grayRef;
+            cv::Mat grayAtual, grayRef;
             
             // 1. Converte ambos para escala de cinza
-            cvtColor(frame, grayAtual, COLOR_BGR2GRAY);
-            cvtColor(frameReferencia, grayRef, COLOR_BGR2GRAY);
+            cv::cvtColor(frame, grayAtual, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(frameReferencia, grayRef, cv::COLOR_BGR2GRAY);
         
             // 2. Aplica desfoque para suavizar ruídos da esteira
-            GaussianBlur(grayAtual, grayAtual, Size(5, 5), 0);
-            GaussianBlur(grayRef, grayRef, Size(5, 5), 0);
+            cv::GaussianBlur(grayAtual, grayAtual, cv::Size(5, 5), 0);
+            cv::GaussianBlur(grayRef, grayRef, cv::Size(5, 5), 0);
 
-            // 3. Subtração absoluta entre refrência e frame atual
-            subtract(grayRef, grayAtual, frameDiff);
+            // 3. Diferença Absoluta
+            cv::absdiff(grayRef, grayAtual, frameDiff);
+            cv::addWeighted(frameDiff, 3.0, frameDiff, 0, 0, frameDiff);
 
-            // 4. Limiarização para isolar apenas as silhuetas significativas
-            threshold(frameDiff, frameThresh, 30, 255, THRESH_BINARY);
+            // 4. Limiarização
+            cv::threshold(frameDiff, frameThresh, 90, 255, cv::THRESH_BINARY);
 
-            // 5. Operações morfológicas para reduzir ruídos e preencher lacunas
-            Mat kernel = getStructuringElement(MORPH_RECT, Size(ruido, ruido));
-            erode(frameThresh, frameMorph, kernel);
-            dilate(frameMorph, frameMorph, kernel);
+            // 5. Fechamento Morfológico 
+            cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(15, 15));
+            cv::morphologyEx(frameThresh, frameMorph, cv::MORPH_CLOSE, kernel);
 
-            // 6. Encontra os contornos dos cacos na esteira
-            vector<vector<Point>> contornos;
+           // 6. Encontra os contornos dos fragmentos
+            std::vector<std::vector<cv::Point>> contornos;
             cv::findContours(frameMorph, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-            numContornos = 0;
+            // Agrupar todos os pontos válidos num único vector
+            std::vector<cv::Point> todosOsPontos;
+            
             for (size_t i = 0; i < contornos.size(); i++) {
-                    
-            // Cria uma máscara para isolar a silhueta do contorno atual
-                Mat mascara = Mat::zeros(frameMorph.size(), CV_8UC1);
-                cv::drawContours(mascara, contornos, (int)i, Scalar(255), FILLED);
-                
-                // Calcula a área exata contando os pixéis da máscara (Evita problemas do IntelliSense)
-                double area = (double)cv::countNonZero(mascara);
-                    
-                // Filtra ruídos pequenos por área mínima
-                if (area > tamMinimo) { 
-                    
-                    // Ignora contornos finos para evitar erro da esteira 
-                    int minX = 10000, maxX = 0, minY = 10000, maxY = 0;
-                    
-                    // Varre todos os pontos do contorno atual para achar os limites extremos
-                    for (size_t p = 0; p < contornos[i].size(); p++) {
-                        if (contornos[i][p].x < minX) minX = contornos[i][p].x;
-                        if (contornos[i][p].x > maxX) maxX = contornos[i][p].x;
-                        if (contornos[i][p].y < minY) minY = contornos[i][p].y;
-                        if (contornos[i][p].y > maxY) maxY = contornos[i][p].y;
-                    }
-                    
-                    float largura = (float)(maxX - minX);
-                    float altura = (float)(maxY - minY);
-                    float proporcao = 0.0f;
-                    
-                    // Evita divisão por zero caso o ruído seja uma linha perfeitamente horizontal
-                    if (altura > 0) proporcao = largura / altura;
+                if (contornos[i].size() > 5) {
+                    todosOsPontos.insert(todosOsPontos.end(), contornos[i].begin(), contornos[i].end());
+                }
+            }
 
-                    bool tocaBorda = (minX <= 5 || minY <= 5 || maxX >= (frame.cols - 5) || maxY >= (frame.rows - 5));
+            numContornos = 0;
+
+            if (todosOsPontos.size() > 50) {
+                
+                // ABORDAGEM MANUAL: Encontra os limites mínimo e máximo (substitui o boundingBox e minAreaRect)
+                int minX = 99999, maxX = -1;
+                int minY = 99999, maxY = -1;
+                
+                for (const auto& p : todosOsPontos) {
+                    if (p.x < minX) minX = p.x;
+                    if (p.x > maxX) maxX = p.x;
+                    if (p.y < minY) minY = p.y;
+                    if (p.y > maxY) maxY = p.y;
+                }
+
+                int largura = maxX - minX;
+                int altura = maxY - minY;
+                int areaAprox = largura * altura; // Aproximação retangular da área
+                    
+                // Filtra ruídos usando a área aproximada
+                if (areaAprox > tamMinimo) { 
+                    
+                    // Cálculo manual da proporção
+                    float proporcao = 0.0f;
+                    if (altura > 0 && largura > 0) {
+                        proporcao = (largura < altura) ? ((float)largura / altura) : ((float)altura / largura);
+                    }
+
+                    // Verificação de borda com base nos limites encontrados
+                    bool tocaBorda = (minX <= 5 || minY <= 5 || 
+                                     maxX >= (frame.cols - 5) || 
+                                     maxY >= (frame.rows - 5));
 
                     if (proporcao > 0.3f && proporcao < 3.0f) {
-                        
-                        numContornos++;
+                        numContornos = 1; 
                         pecadetectada = true;
 
-                    if (tocaBorda) {
-                            // Objeto entrando ou saindo da tela. 
-                            // Desenha em amarelo (0, 255, 255 em BGR) e NÃO classifica, mantendo o tipo = 0.
-                            cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 255), 2);
+                        // Cria a caixa delimitadora com base nos pontos extremos
+                        cv::Rect boundingBox(minX, minY, largura, altura);
+
+                        if (tocaBorda) {
+                            // Objeto a entrar/sair: retângulo amarelo
+                            cv::rectangle(frame, boundingBox, cv::Scalar(0, 255, 255), 2);
                         } else {
-                            // Objeto está 100% dentro da tela. Procede com a classificação!
-                            Scalar mediaBrilho = cv::mean(grayAtual, mascara);
+                            // Cria a máscara sólida preenchendo o retângulo para extrair o brilho
+                            cv::Mat mascara = cv::Mat::zeros(frameMorph.size(), CV_8UC1);
+                            cv::rectangle(mascara, boundingBox, cv::Scalar(255), cv::FILLED);
+
+                            cv::Scalar mediaBrilho = cv::mean(grayAtual, mascara);
                             
                             if (mediaBrilho[0] > contraste) { 
                                 tipo = 1; // Vidro
-                                cv::drawContours(frame, contornos, (int)i, Scalar(0, 255, 0), 2); // Verde
+                                cv::rectangle(frame, boundingBox, cv::Scalar(0, 255, 0), 2); // Verde
                             } else {
                                 tipo = 2; // Descarte
-                                cv::drawContours(frame, contornos, (int)i, Scalar(0, 0, 255), 2); // Vermelho
+                                cv::rectangle(frame, boundingBox, cv::Scalar(0, 0, 255), 2); // Vermelho
                             }
                         }
                     }
-            }
+                }
+            } else {
+                tipo = 0;
             }
         }
-
+            
     switch (_estado){
         
         // Estado inicial, a interface foi gerada mas nenhuma ação foi tomada
@@ -515,6 +537,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 0.2f, 1.0f));
         
         if (Button("Iluminação", ImVec2(130, 50))) {
+            EnviarComandoSerial('O'); // Acende a iluminação
             if (_estado == ESTEIRAOFF){
                 _estadoAnterior = ESTEIRAOFF;
                 _estado = CAMERAON;
@@ -532,6 +555,7 @@ void desenharInterface(Estados& _estado, Estados& _estadoAnterior, GLuint textCa
         PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.3f, 0.3f, 1.0f));
         
         if (Button("Iluminação", ImVec2(130, 50))) { 
+            EnviarComandoSerial('A'); // Acende a iluminação
             if (_estado == PREPARACAO){
                 _estadoAnterior = PREPARACAO;
                 _estado = LUZON;
